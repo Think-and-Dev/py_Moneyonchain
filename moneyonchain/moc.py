@@ -932,14 +932,12 @@ class MoCInrate(Contract):
                        block_identifier: BlockIdentifier = 'latest'):
         """Gets commision rate"""
 
-        raise Exception('DEPRECATED')
+        result = self.sc.functions.getCommissionRate().call(
+            block_identifier=block_identifier)
+        if formatted:
+            result = Web3.fromWei(result, 'ether')
 
-        # result = self.sc.functions.getCommissionRate().call(
-        #     block_identifier=block_identifier)
-        # if formatted:
-        #     result = Web3.fromWei(result, 'ether')
-
-        # return result
+        return result
 
     def bitpro_rate(self, formatted: bool = True,
                     block_identifier: BlockIdentifier = 'latest'):
@@ -1019,14 +1017,12 @@ class MoCInrate(Contract):
                         block_identifier: BlockIdentifier = 'latest'):
         """"""
 
-        raise Exception('DEPRECATED')
+        result = self.sc.functions.getCommissionRate().call(
+            block_identifier=block_identifier)
+        if formatted:
+            result = Web3.fromWei(result, 'ether')
 
-        # result = self.sc.functions.getCommissionRate().call(
-        #     block_identifier=block_identifier)
-        # if formatted:
-        #     result = Web3.fromWei(result, 'ether')
-
-        # return result
+        return result
 
     def commission_address(self, block_identifier: BlockIdentifier = 'latest'):
         """Returns the address of the target receiver of commissions"""
@@ -1044,6 +1040,157 @@ class MoCInrate(Contract):
             block_identifier=block_identifier)
 
         return result
+
+    def calc_commission_value(self, amount, formatted: bool = True):
+        """ Calc commission value amount in ether float"""
+
+        result = self.sc.functions.calcCommissionValue(int(amount * self.precision)).call()
+        if formatted:
+            result = Web3.fromWei(result, 'ether')
+
+        return result
+
+    def calc_mint_interest_value(self, amount, formatted: bool = True, precision: bool = True):
+        """ Calc interest value amount in ether float"""
+
+        bucket = str.encode('X2')
+
+        if precision:
+            amount = int(amount * self.precision)
+        result = self.sc.functions.calcMintInterestValues(bucket, int(amount)).call()
+        if formatted:
+            result = Web3.fromWei(result, 'ether')
+
+        return result
+
+    def calc_bitpro_holders_interest(self, formatted: bool = True,
+                                     block_identifier: BlockIdentifier = 'latest'):
+        """ Calc bitpro holders interest"""
+
+        if self.mode == 'MoC':
+            result = self.sc.functions.calculateBitProHoldersInterest().call(block_identifier=block_identifier)
+        else:
+            result = self.sc.functions.calculateRiskProHoldersInterest().call(block_identifier=block_identifier)
+
+        if formatted:
+            result = [Web3.fromWei(result[0], 'ether'), Web3.fromWei(result[1], 'ether')]
+
+        return result
+
+    def bitpro_interest_address(self, formatted: bool = True,
+                                block_identifier: BlockIdentifier = 'latest'):
+        """ Calc bitpro holders interest"""
+
+        if self.mode == 'MoC':
+            result = self.sc.functions.getBitProInterestAddress().call(block_identifier=block_identifier)
+        else:
+            result = self.sc.functions.getRiskProInterestAddress().call(block_identifier=block_identifier)
+
+        return result
+
+    def is_bitpro_interest_enabled(self, formatted: bool = True,
+                                   block_identifier: BlockIdentifier = 'latest'):
+        """ Calc bitpro holders interest"""
+
+        if self.mode == 'MoC':
+            result = self.sc.functions.isBitProInterestEnabled().call(block_identifier=block_identifier)
+        else:
+            result = self.sc.functions.isRiskProInterestEnabled().call(block_identifier=block_identifier)
+
+        return result
+
+    def doc_inrate_avg(self, amount, formatted: bool = True,
+                       block_identifier: BlockIdentifier = 'latest'):
+        """ Calculates an average interest rate between after and before free doc Redemption"""
+
+        if self.mode == 'MoC':
+            result = self.sc.functions.docInrateAvg(int(amount * self.precision)).call(block_identifier=block_identifier)
+        else:
+            result = self.sc.functions.stableTokenInrateAvg(int(amount * self.precision)).call(block_identifier=block_identifier)
+
+        if formatted:
+            result = Web3.fromWei(result, 'ether')
+
+        return result
+
+    def btc2x_inrate_avg(self, amount, on_minting=False, formatted: bool = True,
+                         block_identifier: BlockIdentifier = 'latest'):
+        """ Calculates an average interest rate between after and before mint/redeem """
+
+        bucket = str.encode('X2')
+
+        if self.mode == 'MoC':
+            result = self.sc.functions.btcxInrateAvg(bucket, int(amount * self.precision), on_minting).call(block_identifier=block_identifier)
+        else:
+            result = self.sc.functions.riskProxInrateAvg(bucket, int(amount * self.precision), on_minting).call(block_identifier=block_identifier)
+
+        if formatted:
+            result = Web3.fromWei(result, 'ether')
+
+        return result
+
+
+class MoCInrate2(MoCInrate):
+    log = logging.getLogger()
+
+    contract_abi = Contract.content_abi_file(
+        os.path.join(os.path.dirname(os.path.realpath(__file__)), 'abi/MoCInrate2.abi'))
+    contract_bin = Contract.content_bin_file(
+        os.path.join(os.path.dirname(os.path.realpath(__file__)), 'abi/MoCInrate2.bin'))
+
+    precision = 10 ** 18
+    mode = 'MoC'
+    project = 'MoC'
+
+    def __init__(self, connection_manager, contract_address=None, contract_abi=None, contract_bin=None):
+
+        if not contract_address:
+            # load from connection manager
+            network = connection_manager.network
+            contract_address = connection_manager.options['networks'][network]['addresses']['MoCInrate2']
+
+        super().__init__(connection_manager,
+                         contract_address=contract_address,
+                         contract_abi=contract_abi,
+                         contract_bin=contract_bin)
+
+        # finally load the contract
+        self.load_contract()
+
+    def implementation(self, block_identifier: BlockIdentifier = 'latest'):
+        """Implementation of contract"""
+
+        contract_admin = ProxyAdmin(self.connection_manager)
+        contract_address = Web3.toChecksumAddress(self.contract_address)
+
+        return contract_admin.implementation(contract_address, block_identifier=block_identifier)
+
+    def commision_rate(self, formatted: bool = True,
+                       block_identifier: BlockIdentifier = 'latest'):
+        """Gets commision rate"""
+
+        raise Exception('DEPRECATED')
+
+        # result = self.sc.functions.getCommissionRate().call(
+        #     block_identifier=block_identifier)
+        # if formatted:
+        #     result = Web3.fromWei(result, 'ether')
+
+        # return result
+
+    def commission_rate(self,
+                        formatted: bool = True,
+                        block_identifier: BlockIdentifier = 'latest'):
+        """"""
+
+        raise Exception('DEPRECATED')
+
+        # result = self.sc.functions.getCommissionRate().call(
+        #     block_identifier=block_identifier)
+        # if formatted:
+        #     result = Web3.fromWei(result, 'ether')
+
+        # return result
 
     def commission_rate_by_transaction_type(self, tx_type, formatted: bool = True,
                        block_identifier: BlockIdentifier = 'latest'):
@@ -1128,85 +1275,6 @@ class MoCInrate(Contract):
         return result
 
     # End: Transaction type constants
-
-    def calc_mint_interest_value(self, amount, formatted: bool = True, precision: bool = True):
-        """ Calc interest value amount in ether float"""
-
-        bucket = str.encode('X2')
-
-        if precision:
-            amount = int(amount * self.precision)
-        result = self.sc.functions.calcMintInterestValues(bucket, int(amount)).call()
-        if formatted:
-            result = Web3.fromWei(result, 'ether')
-
-        return result
-
-    def calc_bitpro_holders_interest(self, formatted: bool = True,
-                                     block_identifier: BlockIdentifier = 'latest'):
-        """ Calc bitpro holders interest"""
-
-        if self.mode == 'MoC':
-            result = self.sc.functions.calculateBitProHoldersInterest().call(block_identifier=block_identifier)
-        else:
-            result = self.sc.functions.calculateRiskProHoldersInterest().call(block_identifier=block_identifier)
-
-        if formatted:
-            result = [Web3.fromWei(result[0], 'ether'), Web3.fromWei(result[1], 'ether')]
-
-        return result
-
-    def bitpro_interest_address(self, formatted: bool = True,
-                                block_identifier: BlockIdentifier = 'latest'):
-        """ Calc bitpro holders interest"""
-
-        if self.mode == 'MoC':
-            result = self.sc.functions.getBitProInterestAddress().call(block_identifier=block_identifier)
-        else:
-            result = self.sc.functions.getRiskProInterestAddress().call(block_identifier=block_identifier)
-
-        return result
-
-    def is_bitpro_interest_enabled(self, formatted: bool = True,
-                                   block_identifier: BlockIdentifier = 'latest'):
-        """ Calc bitpro holders interest"""
-
-        if self.mode == 'MoC':
-            result = self.sc.functions.isBitProInterestEnabled().call(block_identifier=block_identifier)
-        else:
-            result = self.sc.functions.isRiskProInterestEnabled().call(block_identifier=block_identifier)
-
-        return result
-
-    def doc_inrate_avg(self, amount, formatted: bool = True,
-                       block_identifier: BlockIdentifier = 'latest'):
-        """ Calculates an average interest rate between after and before free doc Redemption"""
-
-        if self.mode == 'MoC':
-            result = self.sc.functions.docInrateAvg(int(amount * self.precision)).call(block_identifier=block_identifier)
-        else:
-            result = self.sc.functions.stableTokenInrateAvg(int(amount * self.precision)).call(block_identifier=block_identifier)
-
-        if formatted:
-            result = Web3.fromWei(result, 'ether')
-
-        return result
-
-    def btc2x_inrate_avg(self, amount, on_minting=False, formatted: bool = True,
-                         block_identifier: BlockIdentifier = 'latest'):
-        """ Calculates an average interest rate between after and before mint/redeem """
-
-        bucket = str.encode('X2')
-
-        if self.mode == 'MoC':
-            result = self.sc.functions.btcxInrateAvg(bucket, int(amount * self.precision), on_minting).call(block_identifier=block_identifier)
-        else:
-            result = self.sc.functions.riskProxInrateAvg(bucket, int(amount * self.precision), on_minting).call(block_identifier=block_identifier)
-
-        if formatted:
-            result = Web3.fromWei(result, 'ether')
-
-        return result
 
 
 class MoCExchange(Contract):
@@ -1475,6 +1543,7 @@ class MoCConnector(Contract):
         d_addresses['MoCSettlement'] = self.sc.functions.mocSettlement().call()
         d_addresses['MoCExchange'] = self.sc.functions.mocExchange().call()
         d_addresses['MoCInrate'] = self.sc.functions.mocInrate().call()
+        d_addresses['MoCInrate2'] = self.sc.functions.mocInrate2().call()
         d_addresses['MoCBurnout'] = self.sc.functions.mocBurnout().call()
         if self.mode == 'MoC':
             d_addresses['DoCToken'] = self.sc.functions.docToken().call()
@@ -1510,6 +1579,7 @@ class MoC(Contract):
                  contract_bin=None,
                  contract_address_moc_state=None,
                  contract_address_moc_inrate=None,
+                 contract_address_moc_inrate2=None,
                  contract_address_moc_exchange=None,
                  contract_address_moc_connector=None,
                  contract_address_moc_settlement=None,
@@ -1533,6 +1603,7 @@ class MoC(Contract):
         contract_addresses = dict()
         contract_addresses['MoCState'] = contract_address_moc_state
         contract_addresses['MoCInrate'] = contract_address_moc_inrate
+        contract_addresses['MoCInrate2'] = contract_address_moc_inrate2
         contract_addresses['MoCExchange'] = contract_address_moc_exchange
         contract_addresses['MoCConnector'] = contract_address_moc_connector
         contract_addresses['MoCSettlement'] = contract_address_moc_settlement
@@ -1549,6 +1620,7 @@ class MoC(Contract):
             connector_addresses = self.connector_addresses()
             contract_addresses['MoCState'] = connector_addresses['MoCState']
             contract_addresses['MoCInrate'] = connector_addresses['MoCInrate']
+            contract_addresses['MoCInrate2'] = connector_addresses['MoCInrate2']
             contract_addresses['MoCExchange'] = connector_addresses['MoCExchange']
             contract_addresses['MoCSettlement'] = connector_addresses['MoCSettlement']
             contract_addresses['BProToken'] = connector_addresses['BProToken']
@@ -1559,6 +1631,9 @@ class MoC(Contract):
 
         # load contract moc inrate
         self.sc_moc_inrate = self.load_moc_inrate_contract(contract_addresses['MoCInrate'])
+
+        # load contract moc inrate 2
+        self.sc_moc_inrate2 = self.load_moc_inrate_contract(contract_addresses['MoCInrate2'])
 
         # load contract moc exchange
         self.sc_moc_exchange = self.load_moc_exchange_contract(contract_addresses['MoCExchange'])
@@ -1587,6 +1662,17 @@ class MoC(Contract):
             contract_address = self.connection_manager.options['networks'][network]['addresses']['MoCInrate']
 
         sc = MoCInrate(self.connection_manager,
+                       contract_address=contract_address)
+
+        return sc
+
+    def load_moc_inrate_contract2(self, contract_address):
+
+        network = self.connection_manager.network
+        if not contract_address:
+            contract_address = self.connection_manager.options['networks'][network]['addresses']['MoCInrate2']
+
+        sc = MoCInrate2(self.connection_manager,
                        contract_address=contract_address)
 
         return sc
